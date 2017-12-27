@@ -1,16 +1,6 @@
 <template>
   <section class="section">
     <div class="container">
-      <div class="container is-fullhd level">
-        <div class="level-left">
-          <a @click="toggleRecord" class="button is-primary level-item">
-            {{ recording ? 'Stop' : 'Start'}}
-          </a>
-        </div>
-        <div class="level-right">
-          <a @click="clear" class="button is-danger level-item">Clear</a>
-        </div>
-      </div>
       <div class="tabs is-boxed">
         <ul>
           <li v-for="(file, i) in files" :key="i" 
@@ -24,18 +14,24 @@
           </a></li>
         </ul>
       </div>
+      <p class="field">
+        <a @click="toggleRecord" class="button is-primary">
+          <i v-if="recording" class="fa fa-stop" aria-hidden="true"></i>
+          <i v-else class="fa fa-microphone" aria-hidden="true"></i>
+        </a>
+        <a @click="clear" class="button is-danger">Clear</a>
+      </p>
       <div class="editor">
+        <div class="last-transcript"></div>
         <textarea v-model="files[activeFile].text"
-          class="textarea" placeholder="transcription will be shown here"></textarea>
+          class="transcription textarea" placeholder="transcription will be shown here"></textarea>
       </div>
     </div>
   </section>
 </template>
 
 <script>
-import { recognizeStream } from '@/apis/watson-api'
-import * as mic from 'mic'
-import * as wav from 'wav'
+import { recognizeMic } from '@/apis/watson-api'
 
 export default {
   data () {
@@ -43,13 +39,7 @@ export default {
       files: [{name: 'New File', text: ''}],
       recording: false,
       activeFile: 0,
-      micInstance: null,
-      recognizeStream: null,
-      micConfig: {
-        rate: '16000',
-        channels: '1',
-        fileType: 'raw'
-      }
+      recognizeStream: null
     }
   },
   methods: {
@@ -69,22 +59,30 @@ export default {
     startRecording () {
       this.recording = true
 
-      this.micInstance = mic(this.micConfig)
-      const wavStream = new wav.Writer({
-        sampleRate: parseInt(this.micConfig.rate),
-        channels: parseInt(this.micConfig.channels)
+      recognizeMic({
+        outputElement: '.transcription',
+        resultsBySpeaker: true,
+        model: 'ja-JP_BroadbandModel'
+      }).then(stream => {
+        this.recognizeStream = stream
+        stream.on('data', (e) => this.onData(e))
+        stream.on('close', () => { this.recording = false })
+        stream.on('error', (err) => {
+          console.error(err)
+        })
+      }).catch(err => {
+        console.error(err)
+        alert('Failed to connect to Watson.')
       })
-      // const recStream = recognizeStream(stream)
-      const recStream = recognizeStream(wavStream)
-      const stream = this.micInstance.getAudioStream()
-      stream.pipe(wavStream)
-      // wavStream.on('data', (data) => console.log(data))
-
-      recStream.on('data', (event) => this.recCallback(null, 'data', event))
-      recStream.on('error', (event) => this.recCallback(event))
-      recStream.on('close', (event) => this.recCallback(null, 'close', event))
-      // recStream.pipe(process.stdout)
-      this.micInstance.start()
+    },
+    onData (e) {
+      console.log(e)
+      if (e.transcript) {
+        console.log(e.transcript)
+      }
+      if (e.data) {
+        console.log(e.data)
+      }
     },
     recCallback (err, type, event) {
       if (err) {
@@ -108,7 +106,7 @@ export default {
       }
     },
     stopRecording () {
-      this.micInstance.stop()
+      this.recognizeStream.stop()
       this.recording = false
     },
     selectFile (index) {
@@ -121,6 +119,7 @@ export default {
         name: 'New File',
         text: ''
       })
+      this.activeFile = this.files.length - 1
     }
   }
 }

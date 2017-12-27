@@ -8,7 +8,7 @@ const authService = new watson.AuthorizationV1(credentails)
 
 export function recognizeStream (stream, params = {}) {
   const defaultParams = {
-    model: 'en-US_BroadbandModel',
+    model: 'ja-JP_BroadbandModel',
     'content_type': 'audio/wav',
     'interim_results': true,
     'max_alternatives': 3,
@@ -25,7 +25,7 @@ export function recognizeStream (stream, params = {}) {
   return recognizeStream
 }
 
-export function recognizeMic (outputElement) {
+export function recognizeMic (params) {
   return new Promise((resolve, reject) => {
     authService.getToken({
       url: watson.SpeechToTextV1.URL
@@ -34,7 +34,7 @@ export function recognizeMic (outputElement) {
         reject(err)
         return
       }
-      resolve(recognizeMicrophone({ token, outputElement }))
+      resolve(recognizeMicrophone({ token, ...params }))
     })
   })
 }
