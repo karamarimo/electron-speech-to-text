@@ -28,12 +28,18 @@
         </span>
         <audio-visualizer v-if="recording" :analyser="analyser"
           :mode="visualizerMode"
-          :width="200" :height="30"></audio-visualizer>
+          :width="200" :height="36"></audio-visualizer>
       </p>
       <div class="editor">
         <div class="last-transcript"></div>
-        <textarea v-model="files[activeFile].text"
-          class="transcription textarea" placeholder="transcription will be shown here"></textarea>
+        <div class="panel">
+          <a v-for="(utterance, i) in files[activeFile].utterances" :key="i" class="panel-block">
+            {{ utterance | formatResult }}
+          </a>
+          <a v-if="files[activeFile].utterances.length === 0" class="panel-block has-text-grey">
+            Transcritions will be shown here
+          </a>
+        </div>
       </div>
     </div>
   </section>
@@ -47,14 +53,19 @@ export default {
   components: { AudioVisualizer },
   data () {
     return {
-      files: [{name: 'New File', text: ''}],
+      files: [],
       recording: false,
       activeFile: 0,
       recognizeStream: null,
       analyser: null,
       audioCtx: null,
-      visualizerMode: 'sinewave'
+      visualizerMode: 'sinewave',
+      resultIndexOffset: 0,
+      nextFileNumber: 1
     }
+  },
+  created () {
+    this.addFile()
   },
   mounted () {
     const AudioContext = window.AudioContext || window.webkitAudioContext
@@ -65,7 +76,7 @@ export default {
       this.$electron.shell.openExternal(link)
     },
     clear () {
-      this.files[this.activeFile].text = ''
+      this.files[this.activeFile].utterances = []
     },
     toggleRecord () {
       if (this.recording) {
@@ -76,6 +87,7 @@ export default {
     },
     startRecording () {
       this.recording = true
+      this.resultIndexOffset = this.files[this.activeFile].utterances.length
       navigator.mediaDevices.getUserMedia({ audio: true }).then(audioStream => {
         const audioCtx = this.audioCtx
         const audioSource = audioCtx.createMediaStreamSource(audioStream)
@@ -84,7 +96,6 @@ export default {
         this.analyser = analyser
 
         return recognizeMic({
-          outputElement: '.transcription',
           resultsBySpeaker: true,
           model: 'ja-JP_BroadbandModel',
           mediaStream: audioStream
@@ -102,11 +113,9 @@ export default {
     },
     onData (e) {
       console.log(e)
-      if (e.transcript) {
-        console.log(e.transcript)
-      }
-      if (e.data) {
-        console.log(e.data)
+      if (e.result_index !== undefined && e.results) {
+        const index = this.resultIndexOffset + e.result_index
+        this.files[this.activeFile].utterances.splice(index, 1, e.results)
       }
     },
     stopRecording () {
@@ -119,11 +128,22 @@ export default {
     },
     addFile () {
       if (this.recording) return
-      this.files.push({
-        name: 'New File',
-        text: ''
-      })
+      this.files.push(this.newFile())
       this.activeFile = this.files.length - 1
+    },
+    newFile () {
+      const num = this.nextFileNumber
+      this.nextFileNumber += 1
+      return {name: 'File ' + num, utterances: []}
+    }
+  },
+  filters: {
+    formatResult (utterance) {
+      if (Array.isArray(utterance)) {
+        return utterance.map(r => r.alternatives[0].transcript).join('')
+      } else {
+        return 'Format error'
+      }
     }
   }
 }
