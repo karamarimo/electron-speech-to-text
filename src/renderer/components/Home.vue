@@ -19,7 +19,16 @@
           <i v-if="recording" class="fa fa-stop" aria-hidden="true"></i>
           <i v-else class="fa fa-microphone" aria-hidden="true"></i>
         </a>
-        <a @click="clear" class="button is-danger">Clear</a>
+        <a v-if="!recording" @click="clear" class="button is-danger">Clear</a>
+        <span class="select">
+          <select v-model="visualizerMode">
+            <option value="sinewave">Sine Wave</option>
+            <option value="frequencybars">Frequency Bars</option>
+          </select>
+        </span>
+        <audio-visualizer v-if="recording" :analyser="analyser"
+          :mode="visualizerMode"
+          :width="200" :height="30"></audio-visualizer>
       </p>
       <div class="editor">
         <div class="last-transcript"></div>
@@ -32,15 +41,24 @@
 
 <script>
 import { recognizeMic } from '@/apis/watson-api'
+import AudioVisualizer from '@/components/AudioVisualizer'
 
 export default {
+  components: { AudioVisualizer },
   data () {
     return {
       files: [{name: 'New File', text: ''}],
       recording: false,
       activeFile: 0,
-      recognizeStream: null
+      recognizeStream: null,
+      analyser: null,
+      audioCtx: null,
+      visualizerMode: 'sinewave'
     }
+  },
+  mounted () {
+    const AudioContext = window.AudioContext || window.webkitAudioContext
+    this.audioCtx = new AudioContext()
   },
   methods: {
     open (link) {
@@ -58,11 +76,19 @@ export default {
     },
     startRecording () {
       this.recording = true
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(audioStream => {
+        const audioCtx = this.audioCtx
+        const audioSource = audioCtx.createMediaStreamSource(audioStream)
+        const analyser = audioCtx.createAnalyser()
+        audioSource.connect(analyser)
+        this.analyser = analyser
 
-      recognizeMic({
-        outputElement: '.transcription',
-        resultsBySpeaker: true,
-        model: 'ja-JP_BroadbandModel'
+        return recognizeMic({
+          outputElement: '.transcription',
+          resultsBySpeaker: true,
+          model: 'ja-JP_BroadbandModel',
+          mediaStream: audioStream
+        })
       }).then(stream => {
         this.recognizeStream = stream
         stream.on('data', (e) => this.onData(e))
@@ -72,7 +98,6 @@ export default {
         })
       }).catch(err => {
         console.error(err)
-        alert('Failed to connect to Watson.')
       })
     },
     onData (e) {
@@ -84,29 +109,8 @@ export default {
         console.log(e.data)
       }
     },
-    recCallback (err, type, event) {
-      if (err) {
-        console.error(err)
-        if (this.recording) this.stopRecording()
-        return
-      }
-      if (type === 'close') {
-        console.log('connection closed')
-        if (this.recording) this.stopRecording()
-        return
-      }
-      if (event.result_index) {
-        console.log('index: ' + event.result_index)
-        for (let result of event.results || []) {
-          console.log(result.alternatives[0].transcript, result.final)
-        }
-      }
-      if (event.speaker_labels) {
-        console.log(event.speaker_labels)
-      }
-    },
     stopRecording () {
-      this.recognizeStream.stop()
+      if (this.recognizeStream) this.recognizeStream.stop()
       this.recording = false
     },
     selectFile (index) {
