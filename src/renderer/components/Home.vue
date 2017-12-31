@@ -22,8 +22,8 @@
         <a v-if="!recording" @click="clear" class="button is-danger">Clear</a>
         <span class="select">
           <select v-model="visualizerMode">
-            <option value="sinewave">Sine Wave</option>
-            <option value="frequencybars">Frequency Bars</option>
+            <option value="sinewave">Wave Form</option>
+            <option value="frequencybars">Frequency Spectrum</option>
           </select>
         </span>
         <audio-visualizer v-if="recording" :analyser="analyser"
@@ -98,7 +98,11 @@ export default {
         return recognizeMic({
           resultsBySpeaker: true,
           model: 'ja-JP_BroadbandModel',
-          mediaStream: audioStream
+          mediaStream: audioStream,
+          continuous: false,
+          keywords: ['改行', 'こんにちは'],
+          keywords_threshold: 0.6,
+          interim_results: true
         })
       }).then(stream => {
         this.recognizeStream = stream
